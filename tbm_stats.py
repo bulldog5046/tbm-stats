@@ -5,17 +5,12 @@ import pandas as pd
 from dotenv import load_dotenv
 import os
 
-load_dotenv()
-
-CHROME_DRIVER=os.getenv('CHROME_DRIVER')
-TARGET_URL=os.getenv('TARGET_URL')
-TARGET_BREAKPOINT=os.getenv('TARGET_BREAKPOINT')
-
 class tbm_stats:
 
     def __init__(self) -> None:
         self.all_results = []  # To store results from each debugger pause event
         self.output = pd.DataFrame()
+        load_dotenv(override=True)
 
 
     def handle_script_parsed(self, client, payload):
@@ -49,7 +44,7 @@ class tbm_stats:
         try:
             search_result = await client.send('Debugger.searchInContent', {
                 'scriptId': script_id,
-                'query': TARGET_BREAKPOINT
+                'query': os.getenv('TARGET_BREAKPOINT')
             })
         except errors.NetworkError as e:
             print(f"INFO: Error searching in content: {e}")
@@ -59,11 +54,11 @@ class tbm_stats:
             return False
 
         line_number = search_result['result'][0]['lineNumber']
-        column_number = search_result['result'][0]['lineContent'].find(TARGET_BREAKPOINT)
+        column_number = search_result['result'][0]['lineContent'].find(os.getenv('TARGET_BREAKPOINT'))
         if column_number != -1:
-            print(f"The column number for the substring '{TARGET_BREAKPOINT}' is: {column_number}")
+            print(f"The column number for the substring '{os.getenv('TARGET_BREAKPOINT')}' is: {column_number}")
         else:
-            print(f"The substring '{TARGET_BREAKPOINT}' was not found in the line content.")
+            print(f"The substring '{os.getenv('TARGET_BREAKPOINT')}' was not found in the line content.")
 
         return {"line": line_number, "col": column_number}
 
@@ -102,9 +97,21 @@ class tbm_stats:
         call_frame = call_frames[0]
         object_id = call_frame['this']['objectId']
         _this = await client.send('Runtime.getProperties', {'objectId': object_id, 'ownProperties': True})
-        if (_this['result'][12]['name'] == "cellContent"):
-            print("cellContent Found")
-        cellContent_id = _this['result'][12]['value']['objectId']
+
+        # iterate through the 'this' to find the 'cellContent' objectid.
+        if _this.get('result') and len(_this['result']) > 0:
+            print('looking through results')
+            for record in _this['result']:
+                if record.get('name') == "cellContent":
+                    print('found cellContent: ', record)
+                    cellContent_id = record.get('value').get('objectId')
+                    break
+            
+        else:
+            print('_this is not populated correctly')
+            await client.send('Debugger.resume')
+            return
+
         cellContent_contents = await client.send('Runtime.getProperties', {'objectId': cellContent_id, 'ownProperties': True})
         for contents in cellContent_contents['result']:
             object_id = contents['value']['objectId']
@@ -146,7 +153,7 @@ class tbm_stats:
 
 
     async def main(self):
-        browser = await launch(headless=True, executablePath=CHROME_DRIVER)
+        browser = await launch(headless=True, devtools=True, executablePath=os.getenv('CHROME_DRIVER'))
         page = await browser.newPage()
         client: Connection = await page.target.createCDPSession()
 
@@ -158,7 +165,7 @@ class tbm_stats:
 
         client.on('Debugger.scriptParsed', lambda payload: self.handle_script_parsed(client, payload))
 
-        await page.goto(TARGET_URL)
+        await page.goto(os.getenv('TARGET_URL'))
 
         # Wait for a short duration to ensure all scripts are parsed
         await asyncio.sleep(3)

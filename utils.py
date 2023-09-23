@@ -5,7 +5,7 @@ import os
 from dotenv import load_dotenv
 import re
 
-load_dotenv()
+load_dotenv(override=True)
 DEBUG = (os.getenv('DEBUG') == 'True')
 
 def generate_leaderboard(results: pd.DataFrame, lookup: pd.DataFrame, discord_names: pd.DataFrame) -> str:
@@ -18,7 +18,12 @@ def generate_leaderboard(results: pd.DataFrame, lookup: pd.DataFrame, discord_na
 
     # Sanitise account names to lower case for comparison.
     lookup[lookup.columns[0]] = lookup[lookup.columns[0]].str.lower()
-    lookup[lookup.columns[2]] = lookup[lookup.columns[2]].str.lower()
+    # Check if the third column exists, if not, create it with blank values
+    if lookup.shape[1] > 2:
+        lookup[lookup.columns[2]] = lookup[lookup.columns[2]].str.lower()
+    else:
+        lookup.insert(2, "ExpressAccountName", "")
+
     results['AccountName'] = results['AccountName'].str.lower()
     
     # Merge using lookup as the master table

@@ -7,7 +7,7 @@ from discord_bot import DiscordBot
 from dotenv import load_dotenv
 import time
 
-load_dotenv()
+load_dotenv(override=True)
 DEBUG = (os.getenv('DEBUG') == 'True')
 
 if DEBUG:
@@ -17,6 +17,7 @@ tbm = tbm_stats()
 
 if DEBUG:
     results = pd.read_json(os.getenv('DEBUG_TS_DATA')) # use cached stats
+    #results = tbm.get_results()
 else:
     results = tbm.get_results()
 
