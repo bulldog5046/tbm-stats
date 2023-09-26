@@ -92,6 +92,10 @@ def generate_leaderboard(results: pd.DataFrame, lookup: pd.DataFrame, discord_na
 def get_dataframe_hash(df: pd.DataFrame) -> str:
     # Convert the DataFrame to a binary representation and hash it
     data_hash = hashlib.sha256(pd.util.hash_pandas_object(df, index=True).values).hexdigest()
+
+    if DEBUG:
+        print('get_dataframe_hash: ', data_hash)
+
     return data_hash
 
 
@@ -123,7 +127,10 @@ def load_dataframe_hash(filename: str) -> str:
         return ""
     
     with open(filename, 'r') as f:
-        return f.read().strip()
+        data = f.read().strip()
+        if DEBUG:
+            print('load_dataframe_hash: ', data)
+        return data
     
 
 def dataframe_has_changed(df: pd.DataFrame, filename: str) -> bool:
@@ -139,6 +146,10 @@ def dataframe_has_changed(df: pd.DataFrame, filename: str) -> bool:
     """
     current_hash = get_dataframe_hash(df)
     saved_hash = load_dataframe_hash(filename)
+
+    if DEBUG:
+        print('dataframe_has_changed.current_hash: ', current_hash)
+        print('dataframe_has_changed.saved_hash: ', saved_hash)
     
     return current_hash != saved_hash
 

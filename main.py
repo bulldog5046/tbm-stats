@@ -16,14 +16,18 @@ if DEBUG:
 tbm = tbm_stats()
 
 if DEBUG:
-    results = pd.read_json(os.getenv('DEBUG_TS_DATA')) # use cached stats
-    #results = tbm.get_results()
+    #results = pd.read_json(os.getenv('DEBUG_TS_DATA')) # use cached stats
+    results = tbm.get_results()
 else:
     results = tbm.get_results()
 
 if (not utils.dataframe_has_changed(results, os.getenv('HASH_FILE')) and not DEBUG):
     print('Data is the same. Exiting early.')
     exit()
+
+# Save hash of the new dateframe
+print('Saving Dataframe Hash: ', utils.get_dataframe_hash(results))
+utils.save_dataframe_hash(results, os.getenv('HASH_FILE'))
 
 lookup = pd.read_csv(os.getenv('GOOGLE_SHEET'))
 
@@ -65,9 +69,6 @@ if leaderboard == False:
     exit()
 
 print(leaderboard)
-
-# Save hash of the new dateframe
-utils.save_dataframe_hash(results, os.getenv('HASH_FILE'))
 
 print('Sending Message to Discord..')
 discord.send_message(leaderboard)
