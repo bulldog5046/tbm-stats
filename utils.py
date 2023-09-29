@@ -44,16 +44,19 @@ def generate_leaderboard(results: pd.DataFrame, lookup: pd.DataFrame, discord_na
 
     # Drop rows with NaN values
     merged_df = merged_df.dropna(subset=['Balance'])
-
-    # Sort by Balance descending
-    merged_df = merged_df.sort_values('Balance', ascending=False)
     
     # Convert "Balance" & "Balance_express" columns to numeric, NaN to 0.0
     merged_df['Balance'] = merged_df['Balance'].str.replace('[$,]', '', regex=True).astype(float)
     merged_df['Balance_express'] = merged_df['Balance_express'].str.replace('[$,]', '', regex=True).astype(float).fillna(0.0)
 
     # Calculate PnL by aggregating Balance and Balance_express
-    merged_df['PnL'] = (merged_df['Balance'] + merged_df['Balance_express'] - 50000.00).map('${:,.2f}'.format)
+    merged_df['PnL'] = (merged_df['Balance'] + merged_df['Balance_express'] - 50000.00)
+
+    # Sort by PnL descending
+    merged_df = merged_df.sort_values('PnL', ascending=False)
+
+    # Format the PnL as a dollar value
+    merged_df['PnL'] = merged_df['PnL'].map('${:,.2f}'.format)
     
     # Create a temporary lowercase version of the 'Username' for merging
     merged_df['Username_lower'] = merged_df['Username'].str.lower()
@@ -86,7 +89,8 @@ def generate_leaderboard(results: pd.DataFrame, lookup: pd.DataFrame, discord_na
     if merged_df.empty:
         return False
     
-    return merged_df[['PnL', 'Member']].to_string()
+    # Add Emojis for discord and return
+    return merged_df[['PnL', 'Member']].rename(columns={'PnL': '**PnL**', 'Member': '**Member**'}, index={1: ':first_place:', 2: ':second_place:', 3: ':third_place:'}).to_string()
 
 
 def get_dataframe_hash(df: pd.DataFrame) -> str:

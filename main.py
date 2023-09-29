@@ -5,6 +5,7 @@ import utils
 from tbm_stats import tbm_stats
 from discord_bot import DiscordBot
 from dotenv import load_dotenv
+from datetime import datetime
 import time
 
 load_dotenv(override=True)
@@ -20,6 +21,11 @@ if DEBUG:
     results = tbm.get_results()
 else:
     results = tbm.get_results()
+
+# Normalize the dataframe for hash generation/comparison
+results = results.sort_values('AccountId').reset_index(drop=True)
+print('=============Results DF=============')
+print(results)
 
 if (not utils.dataframe_has_changed(results, os.getenv('HASH_FILE')) and not DEBUG):
     print('Data is the same. Exiting early.')
@@ -55,23 +61,28 @@ members_df = pd.DataFrame(data)
 
 leaderboard = utils.generate_leaderboard(results, lookup, members_df)
 
-# debug
-if (DEBUG):
-    print(members_df)
-    print(leaderboard)
-    discord.stop_bot()
-    exit()
-# /debug
-
 if leaderboard == False:
     discord.stop_bot()
     print('Something went wrong, leaderboard is empty.')
     exit()
 
-print(leaderboard)
+header_string = f":trophy: ***{datetime.now().strftime('%B')} Challenge*** :trophy:\n"
+
+message = header_string + leaderboard.replace(': ', ':         ', 3).replace('second_place:', 'second_place: ', 1)
+
+print(message)
+
+# debug
+if (DEBUG):
+    print(members_df)
+    print(leaderboard)
+    print(message)
+    discord.stop_bot()
+    exit()
+# /debug
 
 print('Sending Message to Discord..')
-discord.send_message(leaderboard)
+discord.send_message(message)
 
 time.sleep(25) # wait for message to send before killing.
 

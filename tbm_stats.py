@@ -103,7 +103,7 @@ class tbm_stats:
             print('looking through results')
             for record in _this['result']:
                 if record.get('name') == "cellContent":
-                    print('found cellContent: ', record)
+                    #print('found cellContent: ', record)
                     cellContent_id = record.get('value').get('objectId')
                     break
             
