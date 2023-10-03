@@ -8,7 +8,17 @@ import re
 load_dotenv(override=True)
 DEBUG = (os.getenv('DEBUG') == 'True')
 
-def generate_leaderboard(results: pd.DataFrame, lookup: pd.DataFrame, discord_names: pd.DataFrame) -> str:
+def generate_leaderboard(results: pd.DataFrame, lookup: pd.DataFrame, discord_names: pd.DataFrame, lookup_format: int = 1) -> str:
+    '''
+    Generate leaderboard and return as string for posting to discord.
+
+    Params:
+    results: results dataframe scraped from topstep
+    lookup: lookup dataframe with references for account number and discord username
+    discord_names: dataframe from discord bot with user data for given channel
+    lookup_format: How to process the lookup data. 1=Basic, 2=Unpacked df from gary
+    '''
+
     
     # Ensure the 'id' columns in discord_names and results are treated as strings
     discord_names['id'] = discord_names['id'].astype(str)
@@ -16,24 +26,48 @@ def generate_leaderboard(results: pd.DataFrame, lookup: pd.DataFrame, discord_na
     # Create a temporary lowercase version of the 'Username' for merging
     discord_names['name_lower'] = discord_names['name'].str.lower()
 
-    # Sanitise account names to lower case for comparison.
-    lookup[lookup.columns[0]] = lookup[lookup.columns[0]].str.lower()
-    # Check if the third column exists, if not, create it with blank values
-    if lookup.shape[1] > 2:
-        lookup[lookup.columns[2]] = lookup[lookup.columns[2]].str.lower()
-    else:
-        lookup.insert(2, "ExpressAccountName", "")
+    if lookup_format == 1:
+        # Sanitise account names to lower case for comparison.
+        lookup[lookup.columns[0]] = lookup[lookup.columns[0]].str.lower()
+        # Check if the third column exists, if not, create it with blank values
+        if lookup.shape[1] > 2:
+            lookup[lookup.columns[2]] = lookup[lookup.columns[2]].str.lower()
+        else:
+            lookup.insert(2, "ExpressAccountName", "")
 
-    results['AccountName'] = results['AccountName'].str.lower()
-    
-    # Merge using lookup as the master table
-    merged_df = lookup.merge(results,
-                            left_on=lookup.columns[0],
-                            right_on='AccountName',
-                            how='left') \
-            .rename(columns={lookup.columns[1]: 'Username', lookup.columns[2]: 'ExpressAccountName'}) \
-            .drop(columns=[lookup.columns[0]])
-    
+        results['AccountName'] = results['AccountName'].str.lower()
+        if DEBUG:
+            print(results)
+        
+        # Merge using lookup as the master table
+        merged_df = lookup.merge(results,
+                                left_on=lookup.columns[0],
+                                right_on='AccountName',
+                                how='left') \
+                .rename(columns={lookup.columns[1]: 'Username', lookup.columns[2]: 'ExpressAccountName'}) \
+                .drop(columns=[lookup.columns[0]])
+        
+    elif lookup_format == 2:
+        # Sanitise account names to lower case for comparison.
+        lookup['Accounts'] = lookup['Accounts'].str.lower()
+        # Check if the third column exists, if not, create it with blank values
+        if 'ExpressAccountName' in lookup.columns:
+            lookup['ExpressAccountName'] = lookup['ExpressAccountName'].str.lower()
+        else:
+            lookup.insert(2, "ExpressAccountName", "")
+
+        results['AccountName'] = results['AccountName'].str.lower()
+        if DEBUG:
+            print(results)
+        
+        # Merge using lookup as the master table
+        merged_df = lookup.merge(results,
+                                left_on='Accounts',
+                                right_on='AccountName',
+                                how='left')
+
+    if DEBUG:
+        print(merged_df)
     # Merge again to get the balance from ExpressAccountName
     merged_df = merged_df.merge(results,
                                 left_on='ExpressAccountName',
@@ -58,29 +92,34 @@ def generate_leaderboard(results: pd.DataFrame, lookup: pd.DataFrame, discord_na
     # Format the PnL as a dollar value
     merged_df['PnL'] = merged_df['PnL'].map('${:,.2f}'.format)
     
-    # Create a temporary lowercase version of the 'Username' for merging
-    merged_df['Username_lower'] = merged_df['Username'].str.lower()
+    if lookup_format == 1:
+        # Create a temporary lowercase version of the 'Username' for merging
+        merged_df['Username_lower'] = merged_df['Username'].str.lower()
 
-    # Strip whitespace
-    merged_df['Username_lower'] = merged_df['Username_lower'].str.strip()
+        # Strip whitespace
+        merged_df['Username_lower'] = merged_df['Username_lower'].str.strip()
 
-    # strip #xxx references
-    merged_df['Username_lower'] = merged_df['Username_lower'].str.replace(r'#\d+$', '', regex=True)
+        # strip #xxx references
+        merged_df['Username_lower'] = merged_df['Username_lower'].str.replace(r'#\d+$', '', regex=True)
 
-    if (DEBUG):
-        print(merged_df)
+        if (DEBUG):
+            print(merged_df)
 
-    # Merge with discord_names using the lowercase versions and set ids
-    merged_df = merged_df.merge(discord_names[['id', 'name', 'name_lower']], left_on='Username_lower', right_on='name_lower', how='left') \
-        .drop(columns=['name', 'name_lower', 'Username_lower'])
-    
-    # Handle IDs and create the 'Member' column. Keep IDs as strings.
-    merged_df['id'] = merged_df['id'].fillna('0')
-    merged_df['id'] = merged_df['id'].apply(lambda x: f"<@{x}>" if x != '0' else None)
-    merged_df['Member'] = np.where(merged_df['id'].isnull(), merged_df['Username'], merged_df['id'])
+        # Merge with discord_names using the lowercase versions and set ids
+        merged_df = merged_df.merge(discord_names[['id', 'name', 'name_lower']], left_on='Username_lower', right_on='name_lower', how='left') \
+            .drop(columns=['name', 'name_lower', 'Username_lower'])
+        
+        # Handle IDs and create the 'Member' column. Keep IDs as strings.
+        merged_df['id'] = merged_df['id'].fillna('0')
+        merged_df['id'] = merged_df['id'].apply(lambda x: f"<@{x}>" if x != '0' else None)
+        merged_df['Member'] = np.where(merged_df['id'].isnull(), merged_df['Username'], merged_df['id'])
 
-    # Update 'Member' where it is NaN with last 4 digits of 'AccountName'
-    merged_df.loc[merged_df['Member'].isna(), 'Member'] = merged_df['AccountName'].str[-4:]
+        # Update 'Member' where it is NaN with last 4 digits of 'AccountName'
+        merged_df.loc[merged_df['Member'].isna(), 'Member'] = merged_df['AccountName'].str[-4:]
+
+    elif lookup_format == 2:
+        merged_df.insert(0, column='Member', value=merged_df['User ID'].apply(lambda x: f"<@{x}>" if x != '0' else None))
+        #merged_df['Member'] = merged_df['User ID'].apply(lambda x: f"<@{x}>" if x != '0' else None)
     
     
     # Reindex to start from 1
