@@ -18,7 +18,9 @@ def generate_leaderboard(results: pd.DataFrame, lookup: pd.DataFrame, discord_na
     discord_names: dataframe from discord bot with user data for given channel
     lookup_format: How to process the lookup data. 1=Basic, 2=Unpacked df from gary
     '''
-
+    
+    # Add a dummy record for those who didn't start with a combine
+    results.loc[len(results)] = [None, None, 'dummy', '$50,000.00']
     
     # Ensure the 'id' columns in discord_names and results are treated as strings
     discord_names['id'] = discord_names['id'].astype(str)
@@ -76,15 +78,18 @@ def generate_leaderboard(results: pd.DataFrame, lookup: pd.DataFrame, discord_na
                                 suffixes=('', '_express')) \
             .drop(columns=['AccountId_express','AccountName_express', 'CreatedAt_express'])
 
-    # Drop rows with NaN values
-    merged_df = merged_df.dropna(subset=['Balance'])
-    
+    # Fill NaN values with default start balance for those who used an express account for the challenge
+    merged_df['Balance'] = merged_df['Balance'].fillna(50000.0)
+
     # Convert "Balance" & "Balance_express" columns to numeric, NaN to 0.0
     merged_df['Balance'] = merged_df['Balance'].str.replace('[$,]', '', regex=True).astype(float)
     merged_df['Balance_express'] = merged_df['Balance_express'].str.replace('[$,]', '', regex=True).astype(float).fillna(0.0)
 
     # Calculate PnL by aggregating Balance and Balance_express
     merged_df['PnL'] = (merged_df['Balance'] + merged_df['Balance_express'] - 50000.00)
+
+    # Drop rows with NaN values after all calculations
+    merged_df = merged_df.dropna(subset=['Balance'])
 
     # Sort by PnL descending
     merged_df = merged_df.sort_values('PnL', ascending=False)
